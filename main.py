@@ -8,15 +8,41 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 
 
+def IsMovie(link):
+    url = link
+    url, sharp, frag = url.partition('#')
+    base, q, query = url.partition('?')
+    query_dict = parse_qs(query)
+    if 'season' in query_dict:
+        return 0
+    else:
+        return 1
+    
+
+class Configuration:
+    global Options
+    Options = Options()
+    Options.headless = True
+    Options.add_argument("--window-size=1920,1080")
+    driver = webdriver.Chrome(options=Options)
+
+
 class Download:
 
     def __init__(self, link, movie, season=0, series=0):
         self.link = link
         self.movie = movie
         self.season = season
-        self.series = series.split(",")
+        self.series = series.split(",") if series else series
 
-    def url(self, ep):
+
+    def main(self):
+        if self.movie:
+            self.download_serial()
+        else:
+            self.download_movie()
+
+    def url(self, ep=0):
         url = self.link
         param, newvalue, param2, newvalue2 = 'season', self.season, 'episode', ep
 
@@ -29,46 +55,40 @@ class Download:
         url_new = f'{base}{q}{query_new}{sharp}{frag}'
         return url_new
 
+    def info(self, ep=0):
+        driver = Configuration.driver
+        if self.movie:
+            driver.get(self.url(ep))
+        else:
+            driver.get(self.link)
+        video = WebDriverWait(driver, 20).until(EC.visibility_of_element_located((By.XPATH, "//*[@id='vjs_video_3_html5_api']"))).get_attribute("src")
+        name = driver.find_element(By.XPATH, '/html/body/main/div[2]/div/div[2]/div[2]/div[2]/div[1]/div[1]').text
+        name = f'{name} -> season {self.season} ep {ep}' if self.movie else f'{name}'
+        data = {"name": name, "video": video}
+        return data
+
     def download_serial(self):
-        global Options
-        Options = Options()
-        Options.headless = True
-        driver = webdriver.Chrome(options=Options)
-        for i in range(len(self.series)):
+        for i in self.series:
             try:
-                print("დაიწყო სეზონი -> {}, სერია {}".format(self.season, self.series[i]))
-                name = "video_season{}_serie{}".format(self.season, self.series[i])
-                url = self.url(series[i])
-                driver.get(url)
-                page_source = driver.page_source
-                video = WebDriverWait(driver, 20).until(EC.visibility_of_element_located((By.XPATH, "//*[@id='vjs_video_3_html5_api']"))).get_attribute("src")
-                urllib.request.urlretrieve(video, name)
+                data = self.info(i)
+                print(f"დაიწყო {data['name']} გადმოწერა")
+                urllib.request.urlretrieve(data['video'], data['name'])
             except TypeError:
                 print("ასეთი სერიალი არ არსებობს")
 
     def download_movie(self):
-        global Options
-        Options = Options()
-        Options.headless = True
-        driver = webdriver.Chrome(options=Options)
         try:
-            print("დაიწყო სეზონი -> {}, სერია {}".format(self.season, self.series[i]))
-            name = "video_season{}_serie{}".format(self.season, self.series[i])
-            url = self.link
-            driver.get(url)
-            page_source = driver.page_source
-            video = WebDriverWait(driver, 20).until(EC.visibility_of_element_located((By.XPATH, "//*[@id='vjs_video_3_html5_api']"))).get_attribute("src")
-            urllib.request.urlretrieve(video, name)
+            data = self.info()
+            print(f"დაიწყო {data['name']} გადმოწერა")
+            urllib.request.urlretrieve(data['video'], data['name'])
         except TypeError:
-            print("ასეთი ფილმი")
+            print("ასეთი ფილმი არ არსებობს")
 
 
 link = input("ლინკი: ")
-movie_type = str(input("არის ფილმი? (კი ან არა): "))
-if movie_type == "არა":
+if IsMovie(link):
+    c = Download(link, 0).main()
+else:
     season = int(input("სეზონი: "))
     series = input("სერიები (გამოყავი მძიმეებით,მაგ:1,2,3): ")
-    c = Download(link, movie_type, season, series)
-else:
-    c=Download(link, movie_type)
-c.download_serial()
+    c = Download(link, 1, season, series).main()
